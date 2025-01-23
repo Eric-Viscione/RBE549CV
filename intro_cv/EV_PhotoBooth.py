@@ -11,7 +11,7 @@ class vid_modifiers:
     def __init__(self):
         pass
 
-    def static_modifiers(self, frame, font, timestamp_toggle = True, controls_toggle = True, border_toggle = True):   ##add all the text and needed transforms to the image
+    def static_modifiers(self, frame, font, timestamp_toggle = True, controls_toggle = True, border_toggle = True, logo_toggle = True):   ##add all the text and needed transforms to the image
         # cv.line(frame,(0,0),(511,511),(255,0,0),5)
         if timestamp_toggle:
             frame = self.timestamp(frame, font)
@@ -19,6 +19,8 @@ class vid_modifiers:
             frame = self.controls(frame, font)
         if border_toggle:
             frame = self.border(frame)
+        if logo_toggle:
+            frame = self.add_logo(frame, filepath = 'opencv_logo.png')
         return frame
 
     def controls(self, frame, font):
@@ -40,6 +42,22 @@ class vid_modifiers:
         return frame
     def border(self, frame, color = [0, 0, 255], width = 10):
         return cv.copyMakeBorder(frame, width, width,width, width, cv.BORDER_CONSTANT, value=color)
+    def add_logo(self, frame, filepath):
+        # print(filepath)
+        logo = cv.imread(filepath)       #read in image
+        rows,cols,_ = logo.shape  #get the shape of the logo 
+        roi = frame[0:rows, 0:cols]      #the roi is the size of the logo
+        
+        # Now create a mask of logo and create its inverse mask also
+        mask = self.apply_threshold(logo, 5, 255) #apply the threshold to the mask and return back the logo itself with black everywhere else
+        img2_fg = cv.bitwise_and(logo,logo,mask = mask)
+        mask_inv = cv.bitwise_not(mask)
+        img1_bg = cv.bitwise_and(roi,roi,mask = mask_inv)
+        # frame = cv.bitwise_and(roi,roi,mask = mask_inv)
+        return img1_bg
+        # 
+        # img2_fg = cv.bitwise_and(logo,logo,mask = mask)
+
     def zoom(self, frame, zoom_factor):
         if zoom_factor < 1: #corrects the zoom factor so we never divide by 0 
             zoom_factor = 1
@@ -177,6 +195,7 @@ class vid_capture:
             elif action == ord('m'):
                 self.copy_roi = not self.copy_roi
                 self.toggle_action(self.copy_roi, "Copying ROI")
+
             elif action == 27: #escape key
                 self.running = False
             return frame
