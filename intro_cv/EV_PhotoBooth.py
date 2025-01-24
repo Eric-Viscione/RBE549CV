@@ -42,10 +42,11 @@ class vid_modifiers:
         return cv.copyMakeBorder(frame, width, width,width, width, cv.BORDER_CONSTANT, value=color)
     
     def add_logo(self, frame, filepath, opac_1 = 0.8, opac_2 = 0.5):
-        frame_copy = frame
+        frame_copy = frame.copy()
         logo = cv.imread(filepath)       #read in image
         assert logo is not None, "file could not be read, check with os.path.exists()"
         mask = self.apply_threshold(logo, 5, 255) #apply the threshold to the mask and return back the logo itself with black everywhere else
+        
         img2_fg = cv.resize(cv.bitwise_and(logo,logo,mask = mask), (100,100))
         rows,cols,_ = img2_fg.shape
         frame[0:rows, 0:cols] = img2_fg
@@ -96,7 +97,6 @@ class vid_modifiers:
         detail = cv.subtract(frame, blurred_image)
         detail = alpha*detail
         detail = detail.astype(frame.dtype)
-        # print(F"Frame Type {frame.dtype}, Detail Type {detail.dtype}")
         new_frame = cv.add(frame, detail)
         return new_frame
     
