@@ -4,7 +4,8 @@ import datetime
 import os
 from tkinter import *
 from PIL import Image, ImageTk
-
+from pynput import keyboard
+from matplotlib import pyplot as plt
 
 
 class vid_modifiers:
@@ -57,13 +58,13 @@ class vid_modifiers:
             _type_: _description_
         """
         controls = ["esc: Close the program", "c: Capture an image", "v: start and end recording of video",
-                    "r: rotate the frame 10 degrees", "t: apply a thresholding filter", "b: blur the image",
-                     "s: sharpen the image", "m: copy and paste date time", "p: toggle the controls board"]
+                    "r: rotate the frame 10 degrees", "t: apply a thresholding filter", "b: Gaussian blur the image",
+                     "s: sharpen the image", "m: copy and paste date time", "g + x or y: toggles built in sobel filter", "s + x or y: toggles custom sobel filter", "d: toggles canny filter", "s + l: toggles custom laplacian filter", "p: toggle the controls board"]
         cv.rectangle(frame,(2,2),(325,75*len(controls)),(255,255,255),-1) 
         cv.putText(frame, "Controls:", (15,15), self.font, 0.5, (0,0,0), 2)
 
         for i, text in enumerate(controls):
-            cv.putText(frame, text, (30, 30+i*15), self.font, 0.5, (0,0,0), 2 )
+            cv.putText(frame, text, (30, 30 + i*15), self.font, 0.5, (0, 0, 0), 2)
         
         return frame
 
@@ -76,7 +77,7 @@ class vid_modifiers:
         Returns:
             _type_: _description_
         """
-        current_time = datetime.datetime.now()
+        current_time = datetime.datetconvultionime.now()
         date_text = f"{current_time.year}/{current_time.month}/{current_time.day}  {current_time.hour}:{current_time.minute}"
         cv.rectangle(frame,(300,480),(640,450),(255,255,255),-1) 
         cv.putText(frame, date_text, (300, 475), self.font, 1, (0, 0, 0), 2)
@@ -228,6 +229,78 @@ class vid_modifiers:
         frame[5:30,320:640] = roi
         return frame
 
+    def apply_kernel(self, frame, kernel, padding = True):
+
+        height, width = frame.shape[0], frame.shape[1]
+        kernel_height, kernel_width = kernel.shape[0], kernel.shape[1]
+        new_img = np.zeros((height, width))
+        if padding:
+            padded_frame = np.pad(frame,((kernel_height//2, kernel_height//2), (kernel_width//2, kernel_width//2)), mode = 'constant', constant_values=0 )
+        else:
+            padded_frame = frame
+        for i in range(kernel_height//2, height-kernel_height//2):
+            for j in range(kernel_width//2, width-kernel_width//2):
+                kernel_area = padded_frame[i - kernel_height//2 : i+kernel_height//2+1 ,j-kernel_width//2 : j+kernel_width//2+1]  
+                new_img[i,j] = np.clip(int((kernel_area * kernel).sum()), 0, 255) #very slow manual implementation
+
+        new_img = new_img.astype(np.uint8)
+        return new_img
+    def sobel(self, frame, direction, type):
+        kernel = np.array([[-1, 0, 1],
+                          [-2, 0, 2],
+                          [-1, 0, 1]])
+        if len(frame.shape) == 2:  #check if it is already grayscale so we can apply both x and y at the same time
+            gray_frame = frame
+        else:  
+            gray_frame = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
+        if direction == 'x':
+            kernel = kernel
+            if type == 'auto':
+                kernel_x = cv.getTrackbarPos('Sobel X Kernel', 'EV_Capture')
+                if kernel_x % 2 == 0:
+                    kernel_x += 1  # keep the kernel odd
+                kernel_x = max(0, min(kernel_x, 30))
+                new_frame =  cv.Sobel(frame,cv.CV_64F,1,0,ksize=kernel_x)
+        
+        elif direction == 'y':
+            kernel = np.rot90(kernel)
+            if type == 'auto':
+                kernel_y = cv.getTrackbarPos('Sobel Y Kernel', 'EV_Capture')
+                if kernel_y % 2 == 0:
+                    kernel_y += 1  # keep the kernel odd
+                kernel_y = max(0, min(kernel_y, 29))
+                new_frame =  cv.Sobel(frame,cv.CV_64F,1,0,ksize=kernel_y)
+        else:
+            print(F"Programming error, Figure out why non valid direction was passed! Recieved {direction}")
+            return False
+        if type == 'manual':
+            new_frame = self.apply_kernel(gray_frame, kernel)
+        if type != 'manual' and type != 'auto':
+            print(F"Programming error, Figure out why non valid type was passed! Recieved {type}")
+            return False
+        return new_frame
+    def canny(self, frame, kernel = 3):
+        threshold_1 = cv.getTrackbarPos('Canny Threshold 1', 'EV_Capture')
+        threshold_2 = cv.getTrackbarPos('Canny Threshold 2', 'EV_Capture')
+        frame = cv.Canny(frame,threshold_1, threshold_2 )
+        return frame
+    def combined_sobel(self, frame, type = 'manual'):
+        grad_x = self.sobel(frame, 'x', 'manual')
+        grad_y = self.sobel(frame, 'y', 'manual')
+        abs_grad_x = cv.convertScaleAbs(grad_x)
+        abs_grad_y = cv.convertScaleAbs(grad_y)
+        grad = cv.addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0)
+        return grad
+    def laplacian(self, frame):
+        kernel = np.array([[0, -1, 0],
+                          [-1, 4, -1],
+                          [0, -1, 0]])
+        if len(frame.shape) == 2:  #check if it is already grayscale so we can apply both x and y at the same time
+            gray_frame = frame
+        else:  
+            gray_frame = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
+        new_frame = self.apply_kernel(gray_frame, kernel)
+        return new_frame
 
 class vid_capture:
     def __init__(self, modifiers):
@@ -249,15 +322,46 @@ class vid_capture:
         self.gaussian_blur = False
         self.sharpen = False
         self.controls = False
+        self.auto_sobel_x = False
+        self.auto_sobel_y = False
+        self.sobel_x = False
+        self.sobel_y = False
+        self.canny = False
+        self.laplacian = False
+        self.four_windows = False
         self.save_image_bool = False
-    def create_directory(self):
+        self.pressed_keys = set()
+        self.listener = keyboard.Listener(on_press=self.on_key_press, on_release=self.on_release)
+        self.listener.start()
+    def on_key_press(self, key, debug = False):
+        if debug:
+            print(f"The key pressed is {key}")
+        try:
+            if key.char:
+               self.pressed_keys.add(key.char)
+        except AttributeError:
+            self.pressed_keys.add(key)
+    def on_release(self,key, debug = False):
+        if key in self.pressed_keys:
+            self.pressed_keys.remove(key)
+            if debug:
+                print(f"Released: {key} - Current keys: {self.pressed_keys}")
+        else:
+            if debug:
+                print(f"Key {key} not found in pressed_keys set.")  
+            pass
+    def create_directory(self, path = None):
+        if path == None:
+            path = self.directory
+        else:
+            path = f'{self.directory}/{path}'
         try: ##directory creation references from geeksforgeeks.com
-            os.mkdir(self.directory)
-            print(f"Directory '{self.directory}' created successfully.")
+            os.mkdir(path)
+            print(f"Directory '{path}' created successfully.")
         except FileExistsError:
-            print(f"Directory '{self.directory}' already exists.")
+            print(f"Directory '{path}' already exists.")
         except PermissionError:
-            print(f"Permission denied: Unable to create '{self.directory}'.")
+            print(f"Permission denied: Unable to create '{path}'.")
         except Exception as e:
             print(f"An error occurred: {e}")
 
@@ -302,15 +406,39 @@ class vid_capture:
     def generate_name(self, prefix, file_type): #genereates the name for our images and captures
         filename = f"{prefix}-{datetime.datetime.now():%Y-%m-%d_%H-%M-%S}.{file_type}"
         return filename
-        
+    def toggle_four_windows(self, frame):
+        temp_path = f'{self.directory}/temp/temp_image.png'
+        laplacian = self.modifiers.laplacian(frame)
+        sobel_x = self.modifiers.sobel(frame, 'x', 'manual')
+        sobel_y = self.modifiers.sobel(frame, 'y', 'manual')
+        plt.subplot(2,2,1),plt.imshow(frame,cmap = 'gray')
+        plt.title('Original'), plt.xticks([]), plt.yticks([])
+        plt.subplot(2,2,2),plt.imshow(laplacian,cmap = 'gray')
+        plt.title('Laplacian'), plt.xticks([]), plt.yticks([])
+        plt.subplot(2,2,3),plt.imshow(sobel_x,cmap = 'gray')
+        plt.title('Sobel X'), plt.xticks([]), plt.yticks([])
+        plt.subplot(2,2,4),plt.imshow(sobel_y,cmap = 'gray')
+        plt.title('Sobel Y'), plt.xticks([]), plt.yticks([])
+        plt.savefig(temp_path, bbox_inches='tight', pad_inches=0)
+        plt.close()
+
+        img = cv.imread(temp_path)
+        os.remove(temp_path)
+        return img
+
     def start_run(self):
         self.create_directory()
+        self.create_directory('temp')
         cv.namedWindow('EV_Capture')
-        cv.createTrackbar('Zoom','EV_Capture',1,255,lambda x: None)
-        cv.createTrackbar('Gaussian SigmaX','EV_Capture',5,30,lambda x: None)
-        cv.createTrackbar('Gaussian SigmaY','EV_Capture',5,30,lambda x: None)
-        cv.createTrackbar('Sharpening Alpha','EV_Capture',0,100,lambda x: None)
-        cv.createTrackbar('Kernel','EV_Capture',0,20,lambda x: None)
+        cv.createTrackbar('Zoom',             'EV_Capture', 1, 255, lambda x: None)
+        cv.createTrackbar('Gaussian SigmaX',  'EV_Capture', 5, 30,  lambda x: None)
+        cv.createTrackbar('Gaussian SigmaY',  'EV_Capture', 5, 30,  lambda x: None)
+        cv.createTrackbar('Sharpening Alpha', 'EV_Capture', 0, 100, lambda x: None)
+        cv.createTrackbar('Sharpening Kernel','EV_Capture', 0, 20,  lambda x: None)
+        cv.createTrackbar('Sobel X Kernel',   'EV_Capture', 0, 30, lambda x: None)
+        cv.createTrackbar('Sobel Y Kernel',   'EV_Capture', 0, 30, lambda x: None)
+        cv.createTrackbar('Canny Threshold 1',   'EV_Capture', 0, 5000, lambda x: None)
+        cv.createTrackbar('Canny Threshold 2',   'EV_Capture', 0, 5000, lambda x: None)
 
     def actions(self, frame, action):
         """parser to set the status of togglable actions
@@ -322,33 +450,104 @@ class vid_capture:
         Returns:
             _type_: _description_
         """   
-        if action == ord('c'):
+        key_actions = {
+            # 'c': (self.save_image, "Saving Image"),
+            'v': (self.toggle_capture, "Toggling Capture"),
+            'e': (self.extract, "Extracting Color"),
+            'r': (self.rotate, "Rotating Image"),
+            't': (self.threshold, "Applying Threshold"),
+            'b': (self.gaussian_blur, "Gaussian Blurring"),
+            's': (self.sharpen, "Sharpening"),
+            'm': (self.copy_roi, "Copying ROI"),
+            'p': (self.controls, "Showing Controls"),
+            's+x': (self.sobel_x, "apply sobel in the x direction")
+        }
 
+        # for key, (action_func, action_name) in key_actions.items():
+        #     if key in self.pressed_keys:
+        #         action_func = not action_func
+        #         self.toggle_capture(action_func, action_name)
+        #         self.pressed_keys.remove(key)
+        if 'c' in self.pressed_keys:
             frame = self.save_image(frame)
+            self.pressed_keys.remove('c')
             return frame
-        elif action == ord('v'):
+        # elif action == ord('v'):
+        if 'v' in self.pressed_keys:
             self.toggle_capture()
-        elif action == ord('e'):
+            self.pressed_keys.remove('v')
+
+        # if action == ord('c'):
+        
+        # elif action == ord('e'):
+        if 'e' in self.pressed_keys:
             self.extract = not self.extract
             self.toggle_action(self.extract, "Extracting Color")
-        elif action == ord('r'):
+            self.pressed_keys.remove('e')
+        # elif action == ord('r'):
+        if 'r' in self.pressed_keys:
             self.rotate = not self.rotate
             self.toggle_action(self.rotate, "Rotating Image")
-        elif action == ord('t'):
+            self.pressed_keys.remove('r')
+        # elif action == ord('t'):
+        if 't' in self.pressed_keys:
             self.threshold = not self.threshold
             self.toggle_action(self.threshold, "Applying Threshold")
-        elif action == ord('b'):
+            self.pressed_keys.remove('t')
+        # elif action == ord('b'):
+        if 'b' in self.pressed_keys:
             self.gaussian_blur = not self.gaussian_blur
             self.toggle_action(self.gaussian_blur, "Gaussian Blurring")
-        elif action == ord('s'):
+            self.pressed_keys.remove('b')
+        # elif action == ord('s'):
+        if 'c' in self.pressed_keys:
             self.sharpen = not self.sharpen
             self.toggle_action(self.sharpen, "Sharpening")
-        elif action == ord('m'):
+            self.pressed_keys.remove('s')
+        # elif action == ord('m'):
+        if 'm' in self.pressed_keys:
             self.copy_roi = not self.copy_roi
             self.toggle_action(self.copy_roi, "Copying ROI")
-        elif action == ord('p'):
+            self.pressed_keys.remove('m')
+        # elif action == ord('p'):
+        if 'p' in self.pressed_keys:
             self.controls = not self.controls
             self.toggle_action(self.controls, "Showing Controls")
+            self.pressed_keys.remove('p')
+        if 'd' in self.pressed_keys:
+            self.canny = not self.canny
+            self.toggle_action(self.canny, "Turning On Edge Detection")
+            self.pressed_keys.remove('d')
+        if 'g' in self.pressed_keys and 'x' in self.pressed_keys:
+            self.auto_sobel_x  = not self.auto_sobel_x
+            self.toggle_action(self.auto_sobel_x, "Applying Built in Sobel in X direction")
+            self.pressed_keys.remove('g')
+            self.pressed_keys.remove('x')
+        if 'g' in self.pressed_keys and 'y' in self.pressed_keys:
+            self.auto_sobel_y  = not self.auto_sobel_y
+            self.toggle_action(self.auto_sobel_y, "Applying Built in Sobel in Y direction")
+            self.pressed_keys.remove('g')
+            self.pressed_keys.remove('y')
+        if 's' in self.pressed_keys and 'x' in self.pressed_keys:
+            self.sobel_x  = not self.sobel_x
+            self.toggle_action(self.sobel_x, "Applying manual Sobel in X direction")
+            self.pressed_keys.remove('s')
+            self.pressed_keys.remove('x')
+        if 's' in self.pressed_keys and 'y' in self.pressed_keys:
+            self.sobel_y  = not self.sobel_y
+            self.toggle_action(self.sobel_y, "Applying manual Sobel in Y direction")
+            self.pressed_keys.remove('s')
+            self.pressed_keys.remove('y')
+        if 's' in self.pressed_keys and 'l' in self.pressed_keys:
+            self.laplacian  = not self.laplacian
+            self.toggle_action(self.laplacian, "Applying manual Laplacian")
+            self.pressed_keys.remove('s')
+            self.pressed_keys.remove('l')
+        if '4' in self.pressed_keys:
+            self.four_windows = not self.four_windows
+            self.toggle_action(self.four_windows, "Displaying four windows of Sobel and Laplacian")
+            self.pressed_keys.remove('4')
+
         elif action == 27: #escape key
             self.running = False
         return frame
@@ -365,22 +564,39 @@ class vid_capture:
             zoom_factor = cv.getTrackbarPos('Zoom', 'EV_Capture') 
             frame = self.modifiers.zoom(frame, zoom_factor)
             # print(self.controls)
-            if self.extract:
-                frame = self.modifiers.extract_color(frame) #optionally define color as a tuple of arrays color = [np.array([lower_r,lower_g,lower_b]),np.array([upper_r,upper_g,upper_b])]
-            if self.rotate:
-                frame = self.modifiers.rotate_image(frame)
-            if self.threshold:
-                frame = self.modifiers.apply_threshold(frame) #optional arguments for the lower and upper threshold bounds adn threshold type eg apply_threshold(frame, lwoer, upper, type)
-            if self.copy_roi:
-                frame = self.modifiers.copy_roi(frame)
-            if self.gaussian_blur:
-                frame = self.modifiers.gaussian_blur(frame)
-            if self.sharpen:
-                frame = self.modifiers.sharpen_image(frame)
-            if self.controls:
-                frame = self.modifiers.controls(frame)
-            elif self.controls == False:
-                frame = self.modifiers.control_control(frame)
+            if not self.four_windows:
+                if self.extract:
+                    frame = self.modifiers.extract_color(frame) #optionally define color as a tuple of arrays color = [np.array([lower_r,lower_g,lower_b]),np.array([upper_r,upper_g,upper_b])]
+                if self.rotate:
+                    frame = self.modifiers.rotate_image(frame)
+                if self.threshold:
+                    frame = self.modifiers.apply_threshold(frame) #optional arguments for the lower and upper threshold bounds adn threshold type eg apply_threshold(frame, lwoer, upper, type)
+                if self.copy_roi:
+                    frame = self.modifiers.copy_roi(frame)
+                if self.gaussian_blur:
+
+                    frame = self.modifiers.gaussian_blur(frame)
+                if self.sharpen:
+                    frame = self.modifiers.sharpen_image(frame)
+                if self.controls:
+                    frame = self.modifiers.controls(frame)
+                if self.sobel_x:
+                    frame = self.modifiers.manual_sobel(frame, 'x', 'manual')
+                if self.sobel_y:
+                    frame = self.modifiers.sobel(frame, 'y', 'manual')
+                if self.auto_sobel_x:
+                    frame = self.modifiers.sobel(frame, 'x', 'auto')
+                if self.auto_sobel_y:
+                    frame = self.modifiers.sobel(frame, 'y', 'auto')
+                if self.canny:
+                    frame = self.modifiers.canny(frame)
+                if self.laplacian:
+                    frame = self.modifiers.laplacian(frame)
+                elif self.controls == False:
+                    frame = self.modifiers.control_control(frame)
+            else:
+                frame = self.toggle_four_windows(frame)
+
             action = cv.waitKey(1)
             frame = self.actions(frame, action)
             
