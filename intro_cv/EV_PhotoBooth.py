@@ -14,7 +14,7 @@ class vid_modifiers:
         self.font = cv.FONT_HERSHEY_SIMPLEX
         pass
 
-    def static_modifiers(self, frame, timestamp_toggle = True, controls_toggle = False, border_toggle = True, add_logo_toggle = True):   
+    def static_modifiers(self, frame, timestamp_toggle = True, controls_toggle = False, border_toggle = True, add_logo_toggle = False):   
         """Adds a bunch of modifiers and text to the screen that will be present no matter what
 
         Args:
@@ -36,7 +36,7 @@ class vid_modifiers:
             frame = self.add_logo(frame, filepath = 'opencv_logo.png')
         return frame
 
-    def control_control(self, frame):
+    def control_control(self, frame, active = False):
         """Adds a small blurb about the control scheme
 
         Args:
@@ -45,7 +45,8 @@ class vid_modifiers:
         Returns:
             np.array: frame with control explanantion
         """
-        cv.putText(frame, "p: toggles controls board:", (15,15), self.font, 0.5, (0,0,0), 2)
+        if active:
+            cv.putText(frame, "p: toggles controls board:", (15,15), self.font, 0.5, (0,0,0), 2)
         return frame
     
     def controls(self, frame):
@@ -229,23 +230,50 @@ class vid_modifiers:
         frame[5:30,320:640] = roi
         return frame
 
-    def apply_kernel(self, frame, kernel, padding = True):
+    def apply_kernel(self, frame, kernel, padding = True, fast_algo = True):
+        """A generic function to apply a generic kernel to any generic image
 
+        Args:
+            frame (_type_): The input frame
+            kernel (_type_): Any size kernel to be used
+            padding (bool, optional): Add padding to the image to ensure it stays the same size
+            fast_algo (bool, optional): This is a faster implementation of kernel actions, much faster than the default one. Defaults to True.
+
+        Returns:
+            _type_: _description_
+        """
         height, width = frame.shape[0], frame.shape[1]
         kernel_height, kernel_width = kernel.shape[0], kernel.shape[1]
-        new_img = np.zeros((height, width))
-        if padding:
-            padded_frame = np.pad(frame,((kernel_height//2, kernel_height//2), (kernel_width//2, kernel_width//2)), mode = 'constant', constant_values=0 )
-        else:
-            padded_frame = frame
-        for i in range(kernel_height//2, height-kernel_height//2):
-            for j in range(kernel_width//2, width-kernel_width//2):
-                kernel_area = padded_frame[i - kernel_height//2 : i+kernel_height//2+1 ,j-kernel_width//2 : j+kernel_width//2+1]  
-                new_img[i,j] = np.clip(int((kernel_area * kernel).sum()), 0, 255) #very slow manual implementation
+        if fast_algo:   ##this implementation is inspired by https://stackoverflow.com/questions/64587303/python-image-convolution-using-numpy-only
+            result_height, result_width = height - kernel_height + 1, width - kernel_width + 1
+            ix0 = np.arange(kernel_height)[:, None] + np.arange(result_height)[None, :]
+            ix1 = np.arange(kernel_width)[:, None] + np.arange(result_width)[None, :]
+            res = kernel[:, None, :, None] * frame[(ix0.ravel()[:, None], ix1.ravel()[None, :])].reshape(kernel_height, result_height, kernel_width, result_width)
+            new_img = res.transpose(1, 3, 0, 2).reshape(result_height, result_width, -1).sum(axis = -1)
+        else:      #this implementation is custom but incredibly slow limits fps to ~1
+            new_img = np.zeros((height, width))
+            if padding:
+                padded_frame = np.pad(frame,((kernel_height//2, kernel_height//2), (kernel_width//2, kernel_width//2)), mode = 'constant', constant_values=0 )
+            else:
+                padded_frame = frame
+            for i in range(kernel_height//2, height-kernel_height//2):
+                for j in range(kernel_width//2, width-kernel_width//2):
+                    kernel_area = padded_frame[i - kernel_height//2 : i+kernel_height//2+1 ,j-kernel_width//2 : j+kernel_width//2+1]  
+                    new_img[i,j] = np.clip(int((kernel_area * kernel).sum()), 0, 255) #very slow manual implementation
 
         new_img = new_img.astype(np.uint8)
         return new_img
     def sobel(self, frame, direction, type):
+        """Apply either a cv built in sobel filter to the image or the custom implemented one
+
+        Args:
+            frame (_type_): _description_
+            direction (_type_): Apply it to either the x or y direction
+            type (_type_): Decalres whetehr to use manual or built in one
+
+        Returns:
+            _type_: _description_
+        """
         kernel = np.array([[-1, 0, 1],
                           [-2, 0, 2],
                           [-1, 0, 1]])
@@ -260,7 +288,7 @@ class vid_modifiers:
                 if kernel_x % 2 == 0:
                     kernel_x += 1  # keep the kernel odd
                 kernel_x = max(0, min(kernel_x, 30))
-                new_frame =  cv.Sobel(frame,cv.CV_64F,1,0,ksize=kernel_x)
+                new_frame =  cv.Sobel(gray_frame,cv.CV_64F,1,0,ksize=kernel_x)
         
         elif direction == 'y':
             kernel = np.rot90(kernel)
@@ -269,7 +297,7 @@ class vid_modifiers:
                 if kernel_y % 2 == 0:
                     kernel_y += 1  # keep the kernel odd
                 kernel_y = max(0, min(kernel_y, 29))
-                new_frame =  cv.Sobel(frame,cv.CV_64F,1,0,ksize=kernel_y)
+                new_frame =  cv.Sobel(gray_frame,cv.CV_64F,1,0,ksize=kernel_y)
         else:
             print(F"Programming error, Figure out why non valid direction was passed! Recieved {direction}")
             return False
@@ -280,6 +308,15 @@ class vid_modifiers:
             return False
         return new_frame
     def canny(self, frame, kernel = 3):
+        """Applies a canny edge detection filter with thresholds defined by track bars
+
+        Args:
+            frame (_type_): _description_
+            kernel (int, optional): Size of the kernel for the canny filter Defaults to 3.
+
+        Returns:
+            _type_: _description_
+        """
         threshold_1 = cv.getTrackbarPos('Canny Threshold 1', 'EV_Capture')
         threshold_2 = cv.getTrackbarPos('Canny Threshold 2', 'EV_Capture')
         frame = cv.Canny(frame,threshold_1, threshold_2 )
@@ -292,6 +329,14 @@ class vid_modifiers:
         grad = cv.addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0)
         return grad
     def laplacian(self, frame):
+        """Applies a custom laplacian filter to the image
+
+        Args:
+            frame (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
         kernel = np.array([[0, -1, 0],
                           [-1, 4, -1],
                           [0, -1, 0]])
@@ -330,6 +375,7 @@ class vid_capture:
         self.laplacian = False
         self.four_windows = False
         self.save_image_bool = False
+        self.static_image = False
         self.pressed_keys = set()
         self.listener = keyboard.Listener(on_press=self.on_key_press, on_release=self.on_release)
         self.listener.start()
@@ -452,15 +498,21 @@ class vid_capture:
         """   
         key_actions = {
             # 'c': (self.save_image, "Saving Image"),
-            'v': (self.toggle_capture, "Toggling Capture"),
-            'e': (self.extract, "Extracting Color"),
-            'r': (self.rotate, "Rotating Image"),
-            't': (self.threshold, "Applying Threshold"),
-            'b': (self.gaussian_blur, "Gaussian Blurring"),
-            's': (self.sharpen, "Sharpening"),
-            'm': (self.copy_roi, "Copying ROI"),
-            'p': (self.controls, "Showing Controls"),
-            's+x': (self.sobel_x, "apply sobel in the x direction")
+            # 'v'  : (self.toggle_capture, "Toggling Capture"),
+            'e'  : (self.extract,        "Extracting Color"),
+            'r'  : (self.rotate,         "Rotating Image"),
+            't'  : (self.threshold,      "Applying Threshold"),
+            'b'  : (self.gaussian_blur,  "Gaussian Blurring"),
+            's'  : (self.sharpen,        "Sharpening"),
+            'm'  : (self.copy_roi,       "Copying ROI"),
+            'p'  : (self.controls,       "Showing Controls"),
+            's+x': (self.sobel_x,        "apply custom sobel in the x direction"),
+            's+y': (self.sobel_x,        "apply custom sobel in the y direction"),
+            'g+x': (self.sobel_x,        "apply built in sobel in the x direction"),
+            'g+y': (self.sobel_x,        "apply built in sobel in the y direction"),
+            '4'  : (self.four_windows,   "Show a collage of original, sobel and laplacian"),
+            'd'  : (self.canny,          "Apply canny edge detection filter")
+            
         }
 
         # for key, (action_func, action_name) in key_actions.items():
@@ -547,19 +599,26 @@ class vid_capture:
             self.four_windows = not self.four_windows
             self.toggle_action(self.four_windows, "Displaying four windows of Sobel and Laplacian")
             self.pressed_keys.remove('4')
-
+        if 'l' in self.pressed_keys:
+            self.static_image = not self.static_image
+            self.toggle_action(self.static_image, "Showing static image")
+            self.pressed_keys.remove('l')
         elif action == 27: #escape key
             self.running = False
         return frame
 
 
     def main_run(self):
+        single_img = True
         self.start_run()
         while self.running:
-            ret , frame = self.cap.read()
-            if not ret:
-                print("Can't recieve frame (stream end?). Exiting .....")
-                break
+            if self.static_image:
+                frame = cv.imread('sudoku.png')
+            else:
+                ret , frame = self.cap.read()
+                if not ret:
+                    print("Can't recieve frame (stream end?). Exiting .....")
+                    break
             frame = self.modifiers.static_modifiers(frame, self.font, True, False) ##optional inputs after font to toggle on and off static filters
             zoom_factor = cv.getTrackbarPos('Zoom', 'EV_Capture') 
             frame = self.modifiers.zoom(frame, zoom_factor)
@@ -581,7 +640,7 @@ class vid_capture:
                 if self.controls:
                     frame = self.modifiers.controls(frame)
                 if self.sobel_x:
-                    frame = self.modifiers.manual_sobel(frame, 'x', 'manual')
+                    frame = self.modifiers.sobel(frame, 'x', 'manual')
                 if self.sobel_y:
                     frame = self.modifiers.sobel(frame, 'y', 'manual')
                 if self.auto_sobel_x:
