@@ -73,8 +73,10 @@ class Image_classifiers:
         gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
         gray_img = np.float32(gray_img)
         dst = cv.cornerHarris(gray_img,blocksize, ksize, k)
-        img[dst>thresh*dst.max()]=[0,0,255]
-        return img
+        img_copy = img.copy()
+        img_copy[dst > thresh * dst.max()] = [0, 0, 255]
+        return img_copy
+
     def sift(self,img, nfeatures=0, nOctavelayers=3, constant_threshold=0.1, edge_threshold=10, sigma=1.6 ):
         gray= cv.cvtColor(img,cv.COLOR_BGR2GRAY)
         sift = cv.xfeatures2d.SIFT_create(nfeatures=nfeatures, 
@@ -101,13 +103,26 @@ def main():
     transformer = Image_transforms()
     img = cv.imread('unity_hall.jpg')
     assert img is not None, "file could not be read, check with os.path.exists()"
-    images = [img, transformer.rotate(img, 10), transformer.scale_image(img, 1.2), transformer.scale_image(img, 0.8), transformer.affine(img), transformer.perspective(img)]
-    stacked_img = stack_images(images, 3)
+    rotated = transformer.rotate(img, 10)
+    scaled_up20 =  transformer.scale_image(img, 1.2)
+    scaled_down20 = transformer.scale_image(img, 0.8)
+    affine = transformer.affine(img)
+    perspective = transformer.perspective(img)
+    images = [img, rotated, scaled_up20, scaled_down20, affine, perspective]
+    images_identified = []
+    for image in images:
+        harris = classifiers.harris(image)
+        sift = classifiers.sift(image)
+        images_identified.append(harris)
+        images_identified.append(sift)
+    # stacked_img = stack_images(images, 3)
     # cv.imshow("Stacked Images", stacked_img)
-    harris = classifiers.harris(img)
-    sift = classifiers.sift(img)
-    # cv.imshow("Harris", harris)
-    cv.imshow("sift", sift)
+    # harris = classifiers.harris(img)
+    # sift = classifiers.sift(img)
+    stacked_img = stack_images(images_identified, 3)
+    cv.imshow("Stacked Images", stacked_img)
+    # # cv.imshow("Harris", harris)
+    # cv.imshow("sift", sift)
     
     cv.waitKey(0)
     cv.destroyAllWindows()
