@@ -16,9 +16,7 @@ def stack_images(images, cols):
         row = np.hstack(imgs_resized[i * cols:(i + 1) * cols]) 
         stacked_images.append(row)
     return np.vstack(stacked_images)
-    
-def check_even(n):
-    return n % 2 == 0
+
 def scale_image(img, scale):
     img_copy = img.copy()
     if len(img.shape) == 3:
@@ -28,6 +26,7 @@ def scale_image(img, scale):
     scaled_size = (img_height*scale, img_width*scale)
     doubled_img = cv.resize(img_copy, scaled_size, interpolation=cv.INTER_LINEAR)
     return doubled_img
+
 def scale_space_extrema(img):
     ##constants
     scale_input = 2
@@ -37,24 +36,22 @@ def scale_space_extrema(img):
     gaussian_constant = 6
     ##turn the image gray for processing
     gray_img = cv.cvtColor(img.copy(),cv.COLOR_BGR2GRAY)
+    curr_img_scaled = cv.resize(gray_img, None, fx=2, fy=2, interpolation=cv.INTER_LINEAR)
     ## double the size of the image so there can be more levels to check
-    scaled_image = scale_image(gray_img, scale_input  )
     dog_images = []
-    prev_img = scaled_image
     for i in range(octave):
         blurred_images = []
-        for j in range(level):
-            # scale = sigma_init * m.sqrt(2)**(1/level)**((i)*level+j)
-            # scale = sigma_init * j**level
-            scale = (sigma_init * m.sqrt(2)**(j / level) * (i + 1))*6
+        curr_img = curr_img_scaled.copy()
+        for j in range(level+3):
+            scale = sigma_init  * (2 ** (j / level))
             kernel = int(gaussian_constant * scale) | 1  # Ensure odd size
-            p = level*(i)
-            # kernel = (int(round(scale*gaussian_constant))+1) if check_even(int(round(scale*gaussian_constant))) else int(round(scale*gaussian_constant))
-            # kernel = int(6 * scale) + 1
-            print(kernel)
-            print(scale)
-            temp_gaussed = cv.GaussianBlur(scaled_image,(kernel, kernel), scale)
+
+
+            # print(f"kernel: {kernel}")
+            # print(f"Scale: {scale}")
+            temp_gaussed = cv.GaussianBlur(curr_img,(kernel, kernel), scale)
             blurred_images.append(temp_gaussed)
+        ##iterate through the DoG pyramid
         for k in range(1, len(blurred_images)):
             dogged_temp = cv.subtract(blurred_images[k], blurred_images[k-1])
             dog_images.append(dogged_temp)
@@ -64,8 +61,8 @@ def scale_space_extrema(img):
             # cv.waitKey(0)
             # cv.destroyAllWindows()
         # scaled_image = scale_image(scaled_image, 0.5)
-    ##iterate through the DoG pyramid
-    dog_images.append(gray_img)
+        curr_img_scaled = cv.resize(curr_img, None, fx=0.5, fy=0.5, interpolation=cv.INTER_LINEAR)
+    # dog_images.append(gray_img)
     return dog_images
 
 
