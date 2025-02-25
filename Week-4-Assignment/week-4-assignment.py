@@ -5,6 +5,8 @@ import math
 import argparse
 from scipy.signal import convolve2d
 class constants:
+    """Class to hold all the recurring constants in these functions
+    """
     octave = 3
     sigma_init = math.sqrt(2) 
     level = 3
@@ -49,23 +51,22 @@ def scale_space_extrema(img, constants):
     gaussian_constant = constants.gaussian_constant
     ##turn the image gray for processing
     gray_img = cv.cvtColor(img.copy(),cv.COLOR_BGR2GRAY)
-    curr_img_scaled = cv.resize(gray_img, None, fx=2, fy=2, interpolation=cv.INTER_LINEAR)
     ## double the size of the image so there can be more levels to check
+    curr_img_scaled = cv.resize(gray_img, None, fx=2, fy=2, interpolation=cv.INTER_LINEAR)
     dog_images = []
-    for i in range(octave):
+    for i in range(octave): #loop through the octaves so the right amount of images are stacked
         blurred_images = []
         curr_img = curr_img_scaled.copy()
-        for j in range(level+3):
+        for j in range(level+3):  ##Create each level by checking one image above and below (The +3)
             scale = sigma_init  * (2 ** (j / level))
             kernel = int(gaussian_constant * scale) | 1  # Ensure odd size
             temp_gaussed = cv.GaussianBlur(curr_img,(kernel, kernel), scale)
             blurred_images.append(temp_gaussed)
         ##iterate through the DoG pyramid
-        for k in range(1, len(blurred_images)):
+        for k in range(1, len(blurred_images)):   #subtract the images in levels from each other to create the pyramid
             dogged_temp = cv.subtract(blurred_images[k], blurred_images[k-1])
             dog_images.append(dogged_temp)
-        curr_img_scaled = cv.resize(curr_img, None, fx=0.5, fy=0.5, interpolation=cv.INTER_LINEAR)
-    print(type(dog_images))
+        curr_img_scaled = cv.resize(curr_img, None, fx=0.5, fy=0.5, interpolation=cv.INTER_LINEAR) #rescale the image to go to the next octave down
     return dog_images
 
 # def find_extrema():
@@ -92,7 +93,7 @@ def key_point_localization(dogged_images, constant):
         for k in range(2, interval+1):
             for j in range(volume):
                 x = math.ceil((j+1)/n)
-                y = ((j - 1) % m) + 1  # Equivalent to MATLAB's mod(j-1, m) + 1
+                y = ((j - 1) % m) + 1  
                 # print(x, y)
                 # sub = dogged_images[i][x:x+3, y:y+3, k-1:k+2]  
                 # sub = dogged_images[i][x:x+2, y:y+2] 
@@ -105,12 +106,12 @@ def key_point_localization(dogged_images, constant):
                     max_value = np.max(sub_img.size)
                     min_value = np.min(sub_img.size)
                     
-                    # Check if current pixel is local maximum
+                    # check if current pixel is local maximum
                     if center_value == max_value:
                         extrema[flag:flag+keypoint_store] = [idx, k, j, 1]
                         flag += keypoint_store
                         
-                    # Check if current pixel is local minimum
+                    # check if current pixel is local minimum
                     if center_value == min_value:
                         extrema[flag:flag+keypoint_store] = [idx, k, j, -1]
                         flag += keypoint_store
