@@ -11,7 +11,7 @@ from shared_libraries import feature_matching
 from time import sleep
 import sys
 
-def panorama(cap, num_images = 3):
+def panorama(cap, num_images = 15):
     panorama_images = []
     while len(panorama_images) < num_images:
         ret, frame = cap.read()
@@ -22,13 +22,12 @@ def panorama(cap, num_images = 3):
         
         panorama_images.append(frame)
         
-        cv.putText(frame, F"pano img {len(panorama_images)}:", (100, 100), cv.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 0), 2)
+        # new_frame=cv.putText(frame, F"pano img {len(panorama_images)}:", (100, 100), cv.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 0), 2)
 
 
-        cv.imshow("pano_image", frame)
-        key = cv.waitKey(10)
+        cv.imshow(f"pano_image {len(panorama_images)}", frame)
+        key = cv.waitKey(250)
         print(f"Captured image {len(panorama_images)}")
-        sleep(2)
     cv.destroyAllWindows()
     
     # panorama_images = [cv.imread('boston1.jpeg'), cv.imread('boston2.jpeg')]
@@ -584,162 +583,6 @@ class vid_capture:
         cv.createTrackbar('Canny Threshold 1',   'EV_Capture', 0, 5000, lambda x: None)
         cv.createTrackbar('Canny Threshold 2',   'EV_Capture', 0, 5000, lambda x: None)
 
-    # def actions(self, frame, action):
-    #     """parser to set the status of togglable actions
-
-    #     Args:
-    #         frame (_type_): _description_
-    #         action (int): the key pressed
-            
-    #     Returns:
-    #         _type_: _description_
-    #     """   
-    #     key_actions = {
-    #         # 'c': (self.save_image, "Saving Image"),
-    #         # 'v'  : (self.toggle_capture, "Toggling Capture"),
-    #         'e'  : (self.extract,        "Extracting Color"),
-    #         'r'  : (self.rotate,         "Rotating Image"),
-    #         't'  : (self.threshold,      "Applying Threshold"),
-    #         'b'  : (self.gaussian_blur,  "Gaussian Blurring"),
-    #         's'  : (self.sharpen,        "Sharpening"),
-    #         'm'  : (self.copy_roi,       "Copying ROI"),
-    #         'p'  : (self.controls,       "Showing Controls"),
-    #         's+x': (self.sobel_x,        "apply custom sobel in the x direction"),
-    #         's+y': (self.sobel_x,        "apply custom sobel in the y direction"),
-    #         'g+x': (self.sobel_x,        "apply built in sobel in the x direction"),
-    #         'g+y': (self.sobel_x,        "apply built in sobel in the y direction"),
-    #         '4'  : (self.four_windows,   "Show a collage of original, sobel and laplacian"),
-    #         'd'  : (self.canny,          "Apply canny edge detection filter"),
-    #         'h'  : (self.harris,         "Turn on Harris Detector"),
-    #         'o'  : (self.sift,           "Turn on sift Detector"),
-    #         '1'  : (self.surf_bf,        "Turn on feature matching with brute force and surf"),
-    #         '2'  : (self.surf_flann,     "Turn on feature matching with flann and surf"),
-    #         '3'  : (self.sift_bf,        "Turn on feature matching with brute force and sift"),
-    #         '5'  : (self.sift_flann,     "Turn on feature matching with flann and sift"),
-    #         '6'  : (self.panorama_toggle,       "Start Stitching 3 images together"      )
-            
-    #     }
-
-    #     # for key, (action_func, action_name) in key_actions.items():
-    #     #     if key in self.pressed_keys:
-    #     #         action_func = not action_func
-    #     #         self.toggle_capture(action_func, action_name)
-    #     #         self.pressed_keys.remove(key)
-    #     if 'c' in self.pressed_keys:
-    #         frame = self.save_image(frame)
-    #         self.pressed_keys.remove('c')
-    #         return frame
-    #     # elif action == ord('v'):
-    #     if 'v' in self.pressed_keys:
-    #         self.toggle_capture()
-    #         self.pressed_keys.remove('v')
-
-    #     # if action == ord('c'):
-        
-    #     # elif action == ord('e'):
-    #     if 'e' in self.pressed_keys:
-    #         self.extract = not self.extract
-    #         self.toggle_action(self.extract, "Extracting Color")
-    #         self.pressed_keys.remove('e')
-    #     # elif action == ord('r'):
-    #     if 'r' in self.pressed_keys:
-    #         self.rotate = not self.rotate
-    #         self.toggle_action(self.rotate, "Rotating Image")
-    #         self.pressed_keys.remove('r')
-    #     # elif action == ord('t'):
-    #     if 't' in self.pressed_keys:
-    #         self.threshold = not self.threshold
-    #         self.toggle_action(self.threshold, "Applying Threshold")
-    #         self.pressed_keys.remove('t')
-    #     # elif action == ord('b'):
-    #     if 'b' in self.pressed_keys:
-    #         self.gaussian_blur = not self.gaussian_blur
-    #         self.toggle_action(self.gaussian_blur, "Gaussian Blurring")
-    #         self.pressed_keys.remove('b')
-    #     # elif action == ord('s'):
-    #     if 'c' in self.pressed_keys:
-    #         self.sharpen = not self.sharpen
-    #         self.toggle_action(self.sharpen, "Sharpening")
-    #         self.pressed_keys.remove('s')
-    #     # elif action == ord('m'):
-    #     if 'm' in self.pressed_keys:
-    #         self.copy_roi = not self.copy_roi
-    #         self.toggle_action(self.copy_roi, "Copying ROI")
-    #         self.pressed_keys.remove('m')
-    #     # elif action == ord('p'):
-    #     if 'p' in self.pressed_keys:
-    #         self.controls = not self.controls
-    #         self.toggle_action(self.controls, "Showing Controls")
-    #         self.pressed_keys.remove('p')
-    #     if 'd' in self.pressed_keys:
-    #         self.canny = not self.canny
-    #         self.toggle_action(self.canny, "Turning On Edge Detection")
-    #         self.pressed_keys.remove('d')
-    #     if 'g' in self.pressed_keys and 'x' in self.pressed_keys:
-    #         self.auto_sobel_x  = not self.auto_sobel_x
-    #         self.toggle_action(self.auto_sobel_x, "Applying Built in Sobel in X direction")
-    #         self.pressed_keys.remove('g')
-    #         self.pressed_keys.remove('x')
-    #     if 'g' in self.pressed_keys and 'y' in self.pressed_keys:
-    #         self.auto_sobel_y  = not self.auto_sobel_y
-    #         self.toggle_action(self.auto_sobel_y, "Applying Built in Sobel in Y direction")
-    #         self.pressed_keys.remove('g')
-    #         self.pressed_keys.remove('y')
-    #     if 's' in self.pressed_keys and 'x' in self.pressed_keys:
-    #         self.sobel_x  = not self.sobel_x
-    #         self.toggle_action(self.sobel_x, "Applying manual Sobel in X direction")
-    #         self.pressed_keys.remove('s')
-    #         self.pressed_keys.remove('x')
-    #     if 's' in self.pressed_keys and 'y' in self.pressed_keys:
-    #         self.sobel_y  = not self.sobel_y
-    #         self.toggle_action(self.sobel_y, "Applying manual Sobel in Y direction")
-    #         self.pressed_keys.remove('s')
-    #         self.pressed_keys.remove('y')
-    #     if 's' in self.pressed_keys and 'l' in self.pressed_keys:
-    #         self.laplacian  = not self.laplacian
-    #         self.toggle_action(self.laplacian, "Applying manual Laplacian")
-    #         self.pressed_keys.remove('s')
-    #         self.pressed_keys.remove('l')
-    #     if '4' in self.pressed_keys:
-    #         self.four_windows = not self.four_windows
-    #         self.toggle_action(self.four_windows, "Displaying four windows of Sobel and Laplacian")
-    #         self.pressed_keys.remove('4')
-    #     if 'l' in self.pressed_keys:
-    #         self.static_image = not self.static_image
-    #         self.toggle_action(self.static_image, "Showing static image")
-    #         self.pressed_keys.remove('l')
-    #     if 'h' in self.pressed_keys:
-    #         self.harris = not self.harris
-    #         self.toggle_action(self.harris, "Turn on Harris Detector")
-    #         self.pressed_keys.remove('h')
-    #     if 'o' in self.pressed_keys:
-    #         self.sift = not self.sift
-    #         self.toggle_action(self.sift, "Turn on Sift Detector")
-    #         self.pressed_keys.remove('o')
-
-    #     if '1' in self.pressed_keys:
-    #         self.surf_bf = not self.surf_bf
-    #         self.toggle_action(self.surf_bf, "Turn on feature matching with brute force and surf")
-    #         self.pressed_keys.remove('1')
-    #     if '2' in self.pressed_keys:
-    #         self.surf_flann = not self.surf_flann
-    #         self.toggle_action(self.surf_flann, "Turn on feature matching with flann and surf")
-    #         self.pressed_keys.remove('2')
-    #     if '3' in self.pressed_keys:
-    #         self.sift_bf = not self.sift_bf
-    #         self.toggle_action(self.sift_bf, "Turn on feature matching with brute force and sift")
-    #         self.pressed_keys.remove('3')
-    #     if '5' in self.pressed_keys:
-    #         self.sift_flann = not self.sift_flann
-    #         self.toggle_action(self.sift_flann, "Turn on feature matching with flann and sift")
-    #         self.pressed_keys.remove('5')
-    #     if '6' in self.pressed_keys:
-    #         self.panorama_toggle = not self.panorama_toggle
-    #         self.toggle_action(self.panorama_toggle, "Creating Panorama" )
-    #         self.pressed_keys.remove('6')
-    #     elif action == 27: #escape key
-    #         self.running = False
-    #     return frame
     def actions(self, frame, action):
         """Parser to set the status of togglable actions
 
